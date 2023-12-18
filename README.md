@@ -1,178 +1,198 @@
-# Filtering Passwords
+# Middleware
 
-here looking for filtering response that send to client.     
+1. inside 'customers' folder create another folder call 'middlewares' and create file call 'validate-customer.middleware.ts. file         
 
-1. create new module, controller and service for 'users'   
-```bash  
-$ nest g module users
-$ nest g controller users/controllers/users
-$ nest g service users/services/users
-```
-
-2. in 'users.service' file create fake users list and it's load functions.   
-
-2.1 create folder call 'types' inside 'users' folder.   
-
-nestjs-tutorial/src/users/types/User.ts
 ```ts
-export interface User {
-  username: string;
-  password: string;
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { NextFunction, Request, Response } from 'express';
+
+@Injectable() // middleware support to dependency injection.
+export class ValidateCustomerMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    console.log('Hello, world. I am inside ValidateCustomerMiddleware');
+    next();
+  }
 }
 ```
 
-2.1 create fake users inside 'user.service'.   
+2. to apply above create middleware need to add it to 'customers.module.ts' file.     
 
+here we can add in to '@Module({})' too. but here adding to class body of Module.   
+
+src/customers/customers.module.ts
 ```ts
-import { Injectable } from '@nestjs/common';
-import { User } from 'src/users/types/User';
-
-@Injectable()
-export class UsersService {
-
-    private users:User[] = [
-        {
-            username:'samadhi',
-            password:'samadhi001'
-        },
-        {
-            username:'laksahan',
-            password:'laksahan001'
-        },
-        {
-            username:'piyasiri',
-            password:'piyasiri001'
-        }
-    ];
-
-    getUsers(){
-        return this.users;
-    }
-
-    getUserByUsername(username:string){
-        return this.users.find((user)=> user.username === username)
-    }
-}
-```
-
-3. implement 'users.controller.ts' file functions to get users and get user by username.    
-
-3.1 just for fun, in 'users.module.ts' file update default provider with key.  
-
-src/users/users.module.ts
-```ts
-import { Module } from '@nestjs/common';
-import { UsersController } from './controllers/users/users.controller';
-import { UsersService } from './services/users/users.service';
+import { MiddlewareConsumer, Module, NestMiddleware, NestModule, RequestMethod } from '@nestjs/common';
+import { CustomerController } from './controllers/customer/customer.controller';
+import { CustomersService } from './services/customers/customers.service';
+import { ValidateCustomerMiddleware } from './middlewares/validate-customer.middleware';
 
 @Module({
-  controllers: [UsersController],
-  // providers: [UsersService]
-  providers: [ // start to add here.
-    {
-      provide:'USER_SERVICE',
-      useClass: UsersService
-    }
-  ]
-
+  controllers: [CustomerController],
+  providers: [CustomersService]
 })
-export class UsersModule {}
-```
-
-3.2 import 'users.service.ts' file in to 'users.controller.ts' file with inject key and make 'getUsers' route and test it on postman.   
-
-src/users/controllers/users/users.controller.ts
-```ts
-import { Controller, Get, Inject } from '@nestjs/common';
-import { UsersService } from 'src/users/services/users/users.service';
-
-@Controller('users')
-export class UsersController {
-  constructor(
-    @Inject('USER_SERVICE') private readonly usersService: UsersService,
-  ) {}
-
-  @Get('')
-  getUsers() {
-    return this.usersService.getUsers();
+export class CustomersModule implements NestModule{
+  configure(consumer:MiddlewareConsumer){
+    consumer.apply(ValidateCustomerMiddleware).forRoutes(
+    {
+      path:'customer/search/:id', // route that want to add middleware
+      method: RequestMethod.GET  // route type
+    },
+    // {
+    //   path:'customer/:id',
+    //   method: RequestMethod.GET
+    // }
+    )
   }
 }
-
 ```
 
-4. in 'User.ts' file add '@Exclude()' decorator that field which we want to 
+3. show how to register middleware for entire controller.     
 
-src/users/types/User.ts
+src/customers/customers.module.ts
 ```ts
-import { Exclude } from "class-transformer";
-
-export interface User {
-    username: string;
-    password: string;
-}
-
-export class SerializedUser {
-    username: string;
-
-    @Exclude()
-    password: string;
-}
-```
-
-5. in 'users.service.ts' map the 'getUsers' function with 'plainToClass' fucntion to remove 'Exclude' field from users.   
-
-src/users/services/users/users.service.ts
-```ts
-import { plainToClass } from 'class-transformer';
-import { SerializedUser, User } from 'src/users/types/User';
+/* ... */
+import { CustomerController } from './controllers/customer/customer.controller';
 
 /* ... */
-
-getUsers(){
-    // return this.users; // - remove
-    return this.users.map((user)=> plainToClass(SerializedUser, user)); // + add
-}
-```   
-
-6. create 'getByUsername' route in 'users.routes.ts' file.
-
-src/users/controllers/users/users.controller.ts
-```ts
-  @Get('username')
-  getByUsername(@Param('username') username:string) {
-    const user = this.usersService.getUserByUsername(username);
-    if(user) return user;
-    else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+@Module({
+  controllers: [CustomerController],
+  providers: [CustomersService]
+})
+export class CustomersModule implements NestModule{
+  configure(consumer:MiddlewareConsumer){
+    consumer.apply(ValidateCustomerMiddleware).forRoutes(CustomerController) // update here
   }
+}
 ```
 
-7. add to  'User.ts' file 'SerializedUser' class to a constructor in order to remove '@Exclude' fields.
+4. show how to exclude certain path when middleware register for entire controller.
 
-src/users/types/User.ts
+src/customers/customers.module.ts
 ```ts
-export class SerializedUser {
-    username: string;
+/* ... */
+@Module({
+  controllers: [CustomerController],
+  providers: [CustomersService]
+})
+export class CustomersModule implements NestModule{
+  configure(consumer:MiddlewareConsumer){
+    consumer.apply(ValidateCustomerMiddleware)
+    .exclude({  // add start here
+        path: 'api/customer/create',
 
-    @Exclude()
-    password: string;
+        method: RequestMethod.POST
+    })
+    .forRoutes(CustomerController) 
+  }
+}
+```
 
-    constructor(partial: Partial<SerializedUser>){
-        Object.assign(this, partial)
+5. show how to authorize using 'ValidateCustomerMiddleware'.  
+
+just you need to update 'validate-customer.middleware.ts' file.
+
+src/customers/middlewares/validate-customer.middleware.ts
+```ts
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { NextFunction, Request, Response } from 'express';
+
+@Injectable()
+export class ValidateCustomerMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    console.log('Hello, world. I am inside ValidateCustomerMiddleware');
+    const { authorization } = req.headers;
+    if(!authorization){
+        return res.status(403).send({error:'No Authentication Token Provided'});
     }
+    if(authorization=== '123'){
+      next();
+    }else {
+      return res.status(403).send({error: 'Invalid Authentication Token Provided.'})
+    }
+  }
 }
 ```
 
-8. now when we return user then call it with above 'SerializedUser' class instance.   
+6. create another middleware call 'CustomerAccountValidate'   
 
-'UseInterceptors' is nestjs documentation recomanded way to remove data field from the response object.
+6.1 create middleware file inside 'middlewares' folder call 'validate-customer-account.middleware.ts'   
 
-```ts  
-  @UseInterceptors(ClassSerializerInterceptor) // + add here
-  @Get('username')
-  getByUsername(@Param('username') username:string) {
-    const user = this.usersService.getUserByUsername(username);
-    // if(user) return user;
-    if(user) return new SerializedUser(user); // update here
-    else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+
+src/customers/middlewares/validate-customer-account.middleware.ts
+```ts
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { NextFunction, Request, Response } from 'express';
+
+@Injectable() 
+export class ValidateCustomerAccountMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    console.log('Hello, world. I am inside ValidateCustomerAccountMiddleware');
+    const { valid } = req.headers;
+    if(valid){
+      next();
+    }else {
+      return res.status(401).send({error: 'Customer Account Invalid!'})
+    }
   }
+}
 ```
+
+6.2 show how to define second middleware in 'CustomersModule'.   
+
+```ts
+import { ValidateCustomerMiddleware } from './middlewares/validate-customer.middleware';
+import { ValidateCustomerAccountMiddleware } from './middlewares/validate-customer-account.middleware';
+
+@Module({
+  controllers: [CustomerController],
+  providers: [CustomersService]
+})
+export class CustomersModule implements NestModule{
+  configure(consumer:MiddlewareConsumer){
+    consumer.apply(
+        ValidateCustomerMiddleware,
+        ValidateCustomerAccountMiddleware // add here
+        )
+      .exclude({
+        path: 'api/customer/create',
+        method: RequestMethod.POST
+      })
+      .forRoutes(
+        CustomerController
+    )
+  }
+}
+```
+
+7. show how to add middleware as a arrow function inside CustomersModule class body.   
+
+```ts
+import { ValidateCustomerMiddleware } from './middlewares/validate-customer.middleware';
+import { ValidateCustomerAccountMiddleware } from './middlewares/validate-customer-account.middleware';
+
+@Module({
+  controllers: [CustomerController],
+  providers: [CustomersService]
+})
+export class CustomersModule implements NestModule{
+  configure(consumer:MiddlewareConsumer){
+    consumer.apply(
+        ValidateCustomerMiddleware,
+        ValidateCustomerAccountMiddleware 
+        (req:Request, res:Response, next:NextFunction) => { // start to add from here.
+        console.log('Last Middleware');
+        next();
+        }
+        )
+      .exclude({
+        path: 'api/customer/create',
+        method: RequestMethod.POST
+      })
+      .forRoutes(
+        CustomerController
+    )
+  }
+}
+```
+
+
