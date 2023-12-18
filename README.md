@@ -33,6 +33,7 @@ import { CustomerController } from './controllers/customer/customer.controller';
 })
 export class CustomersModule {}
 ```
+
 src/customers/controllers/customer/customer.controller.ts
 ```ts 
 import { Controller } from '@nestjs/common';
@@ -104,7 +105,7 @@ export class CustomerController {
 
   @Get('')
   getCustomer(){
-    return this.customerService.findCustomer(); + add 
+    return this.customerService.findCustomer(); //+ add 
   }
 }
 ```
