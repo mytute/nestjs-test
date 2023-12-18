@@ -2,12 +2,26 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class CustomersService {
-
-    findCustomer(){ // + add
-        return {
+    private customers = [
+        {
             id:1,
-            email:'samadhivkcom@gmail.com',
-            name: 'Samadhi'
+            email:'samadhi@gmail.com',
+            name:'Samadhi'
+        },
+        {
+            id:2,
+            email:'laksahan@gmail.com',
+            name:'Laksahan'
+        },
+        {
+            id:1,
+            email:'piyasiri@gmail.com',
+            name:'Piyasiri'
         }
+    ];
+
+
+    findCustomer(id:number){ // + add
+        return this.customers.find((customer)=> customer.id===id)
     }
 }
