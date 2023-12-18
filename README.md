@@ -32,10 +32,10 @@ export class CreateCustomerDto {
 
 src/customers/types/Customer.ts
 ```ts
-export class CreateCustomerDto {
-   id: number;
-   email: string;
-   name: string;
+interface Customer {
+  id: number;
+  email: string;
+  name: string;
 }
 ```
 
