@@ -1,14 +1,49 @@
-#  Controlling the Request & Response
+#  POST Requests & Data Transfer Objects
 
-1. create list of customers inside 'CustomersService' file and update 'findCustomer' to find customer by id.    
+1. show how to set global api url prefix. 
+src/main.ts
+```ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api') // + add
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+
+2. show how to handle request body using 'Data Transfer Objects' instead of express way with '@Req' body.    
+
+2.1  create folder call 'dtos' inside 'customers' folder and inside it create 'CreateCustomer.dto.ts' file.
+
+src/customers/dtos/CreateCustomer.dto.ts
+```ts
+export class CreateCustomerDto {
+   id: number;
+   email: string;
+   name: string;
+}
+```
+
+2.2 create folder call 'types' inside 'customers' and inside it create 'Customer.ts' file.  
+
+src/customers/types/Customer.ts
+```ts
+export class CreateCustomerDto {
+   id: number;
+   email: string;
+   name: string;
+}
+```
+
+2.3 add above created 'Customer.ts' interface to 'customers.service.ts' file, customer list type.  
 
 src/customers/services/customers/customers.service.ts
 ```ts
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class CustomersService {
-    private customers = [
+    private customers: Customer[] = [ // + add here
         {
             id:1,
             email:'samadhi@gmail.com',
@@ -25,54 +60,47 @@ export class CustomersService {
             name:'Piyasiri'
         }
     ];
-
-
-    findCustomer(id:number){ // + add
-        return this.customers.find((customer)=> customer.id===id)
-    }
-}
 ```
 
-2. in 'customer.controller.ts' file make changes of 'getCustomer' method to make receive router parameter.   
+2.4 inside 'customers.service.ts' file add 'createCustomer' and 'getCustomers' for add new customer and load all customers  
 
-* in express way(get more controller of the req and res)   
-
-src/customers/controllers/customer/customer.controller.ts  
- note: when you are using '@Req()' and '@Res()' you can't use return to send response 
+src/customers/services/customers/customers.service.ts
 ```ts
-/* ... */
-@Get(':id')
-getCustomer(@Req() req:Request, @Res() res:Response){
-    const id = Number(req.params.id)
-    const customer =  this.customerService.findCustomer(id);
-    if(customer){
-    res.send(customer);
-    }else{
-    res.status(400).send({msg:'Customer not found'});
-    }
+createCustomer(customerDto:CreateCustomerDto){
+    this.customers.push(customerDto);
+}
+
+getCustomers(){
+    return this.customers;
 }
 ```
 
-
-* in nestjs way
-
+2.5 create routes in 'customers.controller.ts' file in order to call above servieces.    
 src/customers/controllers/customer/customer.controller.ts
 ```ts
-@Get(':id')
-    getCustomer1(@Param('id') id: number){
-      console.log(typeof id); // result > string
-      return this.customerService.findCustomer(id);
-    }
-```
-by converting 'id' from string to number using pips ('ParseIntPipe')
-src/customers/controllers/customer/customer.controller.ts
-```ts
-// test url > http://localhost:3000/customer/search/1
-@Get('/search/:id')
-getCustomer1(@Param('id', ParseIntPipe) id: number){
-    console.log(typeof id); // result > number
-    const customer =  this.customerService.findCustomer(id);
-    if(customer) return customer;
-    else throw new HttpException('Customer not found', HttpStatus.BAD_REQUEST);
+@Post('create')
+creatCustomer(@Body() createCustomerDto:CreateCustomerDto){
+    console.log(createCustomerDto)
+    this.customerService.createCustomer(createCustomerDto)
+}
+
+@Get('')
+getAllCustomers(){
+    return this.customerService.getCustomers()
 }
 ```
+
+2.6 test above create and load all customers api using following urls   
+
+to create new customer.    
+[POST] http://localhost:3000/api/customer/create 
+```json
+{
+    "email" : "samadhivkcom@gmail.com",
+    "id": "4",
+    "name": "samadhi laksahan"
+}
+```
+
+to load all customer.    
+[GET] http://localhost:3000/api/customer
