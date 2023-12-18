@@ -1,107 +1,178 @@
-# Validating POST Requests
+# Filtering Passwords
 
-validating DTO  
+here looking for filtering response that send to client.     
 
-1. install following two packages to add validation feature.   
-
-```bash
-$ npm i --save class-validator class-transformer
+1. create new module, controller and service for 'users'   
+```bash  
+$ nest g module users
+$ nest g controller users/controllers/users
+$ nest g service users/services/users
 ```
 
-DOC > https://www.npmjs.com/package/class-validator
+2. in 'users.service' file create fake users list and it's load functions.   
 
+2.1 create folder call 'types' inside 'users' folder.   
 
-2. show how to add class validation for DTO   
-
-you have to call this validation in the controller in order to validate.    
-
-src/customers/dtos/CreateCustomer.dto.ts
+nestjs-tutorial/src/users/types/User.ts
 ```ts
-import { IsEmail, IsNotEmpty, IsNumberString } from "class-validator";
-
-export class CreateCustomerDto {
-    @IsEmail()
-    email: string;
-
-    @IsNumberString()
-    id: number;
-
-    @IsNotEmpty()
-    name: string;
+export interface User {
+  username: string;
+  password: string;
 }
 ```
 
-3. show how to call definded validation in the controller using '@UsePipes()' and show the results using POSTMAN application.    
+2.1 create fake users inside 'user.service'.   
 
-src/customers/controllers/customer/customer.controller.ts
 ```ts
-@Post('create')
-@UsePipes(ValidationPipe) // add here
-createCustomer(@Body() createCustomerDto:CreateCustomerDto){
-    console.log(createCustomerDto);
-    this.customerService.createCustomer(createCustomerDto);
-}
-```
+import { Injectable } from '@nestjs/common';
+import { User } from 'src/users/types/User';
 
-4. show how to validate nested object. for that create 'CreateAddressDto' and add it in to 'CreateCustomer' dto address line.  
+@Injectable()
+export class UsersService {
 
-* create 'CreateAddressDto' and add validation to it.    
+    private users:User[] = [
+        {
+            username:'samadhi',
+            password:'samadhi001'
+        },
+        {
+            username:'laksahan',
+            password:'laksahan001'
+        },
+        {
+            username:'piyasiri',
+            password:'piyasiri001'
+        }
+    ];
 
-src/customers/dtos/CreateAddress.dto.ts
-```ts
-import { IsNotEmpty } from "class-validator";
+    getUsers(){
+        return this.users;
+    }
 
-export class CreateAddressDto {
-    @IsNotEmpty()
-    line1:string;
-
-    line2?:string;
-
-    @IsNotEmpty()
-    zip:string;
-
-    @IsNotEmpty()
-    city:string;
-
-    @IsNotEmpty()
-    state:string;
-}
-```
-
-src/customers/dtos/CreateCustomer.dto.ts
-```ts
-import { IsEmail, IsNotEmpty, IsNumberString, ValidateNested } from "class-validator";
-import { CreateAddressDto } from "./CreateAddress.dto";
-import { Type } from "class-transformer";
-
-export class CreateCustomerDto {
-    @IsEmail()
-    email: string;
-
-    @IsNumberString()
-    id: number;
-
-    @IsNotEmpty()
-    name: string;
-
-    @ValidateNested()
-    @Type(()=> CreateAddressDto) // start to validate nested class
-    @IsNotEmpty() // address field is manditory 
-    address: CreateAddressDto; // nested address object
-}
-```
-
-postman [URL] > http://localhost:3000/api/customer/create
-```json
-{
-    "email" : "samadhivkcom@gmail.com",
-    "id": "4",
-    "name": "samadhi laksahan",
-    "address":{
-       "line1": "x",
-       "zip": "zip",
-       "city": "city",
-       "state": "state"
+    getUserByUsername(username:string){
+        return this.users.find((user)=> user.username === username)
     }
 }
+```
+
+3. implement 'users.controller.ts' file functions to get users and get user by username.    
+
+3.1 just for fun, in 'users.module.ts' file update default provider with key.  
+
+src/users/users.module.ts
+```ts
+import { Module } from '@nestjs/common';
+import { UsersController } from './controllers/users/users.controller';
+import { UsersService } from './services/users/users.service';
+
+@Module({
+  controllers: [UsersController],
+  // providers: [UsersService]
+  providers: [ // start to add here.
+    {
+      provide:'USER_SERVICE',
+      useClass: UsersService
+    }
+  ]
+
+})
+export class UsersModule {}
+```
+
+3.2 import 'users.service.ts' file in to 'users.controller.ts' file with inject key and make 'getUsers' route and test it on postman.   
+
+src/users/controllers/users/users.controller.ts
+```ts
+import { Controller, Get, Inject } from '@nestjs/common';
+import { UsersService } from 'src/users/services/users/users.service';
+
+@Controller('users')
+export class UsersController {
+  constructor(
+    @Inject('USER_SERVICE') private readonly usersService: UsersService,
+  ) {}
+
+  @Get('')
+  getUsers() {
+    return this.usersService.getUsers();
+  }
+}
+
+```
+
+4. in 'User.ts' file add '@Exclude()' decorator that field which we want to 
+
+src/users/types/User.ts
+```ts
+import { Exclude } from "class-transformer";
+
+export interface User {
+    username: string;
+    password: string;
+}
+
+export class SerializedUser {
+    username: string;
+
+    @Exclude()
+    password: string;
+}
+```
+
+5. in 'users.service.ts' map the 'getUsers' function with 'plainToClass' fucntion to remove 'Exclude' field from users.   
+
+src/users/services/users/users.service.ts
+```ts
+import { plainToClass } from 'class-transformer';
+import { SerializedUser, User } from 'src/users/types/User';
+
+/* ... */
+
+getUsers(){
+    // return this.users; // - remove
+    return this.users.map((user)=> plainToClass(SerializedUser, user)); // + add
+}
+```   
+
+6. create 'getByUsername' route in 'users.routes.ts' file.
+
+src/users/controllers/users/users.controller.ts
+```ts
+  @Get('username')
+  getByUsername(@Param('username') username:string) {
+    const user = this.usersService.getUserByUsername(username);
+    if(user) return user;
+    else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+  }
+```
+
+7. add to  'User.ts' file 'SerializedUser' class to a constructor in order to remove '@Exclude' fields.
+
+src/users/types/User.ts
+```ts
+export class SerializedUser {
+    username: string;
+
+    @Exclude()
+    password: string;
+
+    constructor(partial: Partial<SerializedUser>){
+        Object.assign(this, partial)
+    }
+}
+```
+
+8. now when we return user then call it with above 'SerializedUser' class instance.   
+
+'UseInterceptors' is nestjs documentation recomanded way to remove data field from the response object.
+
+```ts  
+  @UseInterceptors(ClassSerializerInterceptor) // + add here
+  @Get('username')
+  getByUsername(@Param('username') username:string) {
+    const user = this.usersService.getUserByUsername(username);
+    // if(user) return user;
+    if(user) return new SerializedUser(user); // update here
+    else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+  }
 ```
