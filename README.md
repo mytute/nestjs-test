@@ -90,3 +90,17 @@ export class CreateCustomerDto {
     address: CreateAddressDto; // nested address object
 }
 ```
+postman [URL] > http://localhost:3000/api/customer/create
+```json
+{
+    "email" : "samadhivkcom@gmail.com",
+    "id": "4",
+    "name": "samadhi laksahan",
+    "address":{
+       "line1": "x",
+       "zip": "zip",
+       "city": "city",
+       "state": "state"
+    }
+}
+```
