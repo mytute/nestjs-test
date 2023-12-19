@@ -1,198 +1,89 @@
-# Middleware
+# Exceptions & Handling Exceptions
 
-1. inside 'customers' folder create another folder call 'middlewares' and create file call 'validate-customer.middleware.ts. file         
 
+
+1. show how to make customer error handling.   
+
+1.1 create folder call 'exceptions' inside 'users' folder and create 'UserNotFound.exception.ts' file in it. 
+
+src/users/exceptions/UserNotFound.exception.ts
 ```ts
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { NextFunction, Request, Response } from 'express';
+import { HttpException, HttpStatus } from "@nestjs/common";
 
-@Injectable() // middleware support to dependency injection.
-export class ValidateCustomerMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    console.log('Hello, world. I am inside ValidateCustomerMiddleware');
-    next();
-  }
-}
-```
-
-2. to apply above create middleware need to add it to 'customers.module.ts' file.     
-
-here we can add in to '@Module({})' too. but here adding to class body of Module.   
-
-src/customers/customers.module.ts
-```ts
-import { MiddlewareConsumer, Module, NestMiddleware, NestModule, RequestMethod } from '@nestjs/common';
-import { CustomerController } from './controllers/customer/customer.controller';
-import { CustomersService } from './services/customers/customers.service';
-import { ValidateCustomerMiddleware } from './middlewares/validate-customer.middleware';
-
-@Module({
-  controllers: [CustomerController],
-  providers: [CustomersService]
-})
-export class CustomersModule implements NestModule{
-  configure(consumer:MiddlewareConsumer){
-    consumer.apply(ValidateCustomerMiddleware).forRoutes(
-    {
-      path:'customer/search/:id', // route that want to add middleware
-      method: RequestMethod.GET  // route type
-    },
-    // {
-    //   path:'customer/:id',
-    //   method: RequestMethod.GET
-    // }
-    )
-  }
-}
-```
-
-3. show how to register middleware for entire controller.     
-
-src/customers/customers.module.ts
-```ts
-/* ... */
-import { CustomerController } from './controllers/customer/customer.controller';
-
-/* ... */
-@Module({
-  controllers: [CustomerController],
-  providers: [CustomersService]
-})
-export class CustomersModule implements NestModule{
-  configure(consumer:MiddlewareConsumer){
-    consumer.apply(ValidateCustomerMiddleware).forRoutes(CustomerController) // update here
-  }
-}
-```
-
-4. show how to exclude certain path when middleware register for entire controller.
-
-src/customers/customers.module.ts
-```ts
-/* ... */
-@Module({
-  controllers: [CustomerController],
-  providers: [CustomersService]
-})
-export class CustomersModule implements NestModule{
-  configure(consumer:MiddlewareConsumer){
-    consumer.apply(ValidateCustomerMiddleware)
-    .exclude({  // add start here
-        path: 'api/customer/create',
-
-        method: RequestMethod.POST
-    })
-    .forRoutes(CustomerController) 
-  }
-}
-```
-
-5. show how to authorize using 'ValidateCustomerMiddleware'.  
-
-just you need to update 'validate-customer.middleware.ts' file.
-
-src/customers/middlewares/validate-customer.middleware.ts
-```ts
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { NextFunction, Request, Response } from 'express';
-
-@Injectable()
-export class ValidateCustomerMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    console.log('Hello, world. I am inside ValidateCustomerMiddleware');
-    const { authorization } = req.headers;
-    if(!authorization){
-        return res.status(403).send({error:'No Authentication Token Provided'});
+export class UserNotFound extends HttpException {
+    constructor(msg?: string, status?:HttpStatus){
+        // here we can override message and status
+        super(msg || 'User not found', status || HttpStatus.BAD_REQUEST)
     }
-    if(authorization=== '123'){
-      next();
-    }else {
-      return res.status(403).send({error: 'Invalid Authentication Token Provided.'})
+}
+```
+
+1.2 then go to 'users.controller.ts' file and use above custom exception to the ':username' route when user not found.  
+
+src/users/controllers/users/users.controller.ts
+```ts
+  @UseInterceptors(ClassSerializerInterceptor)
+  @Get(':username')
+  getByUsername(@Param('username') username:string) {
+    const user = this.usersService.getUserByUsername(username);
+    if(user) return new SerializedUser(user);
+    // else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+    else throw new UserNotFound; // update here
+  }
+```
+
+2. use nestjs buitin HTTP exception to instead of custom created 'UserNotFound' exception.  
+
+src/users/controllers/users/users.controller.ts
+```ts
+  @UseInterceptors(ClassSerializerInterceptor)
+  @Get(':username')
+  getByUsername(@Param('username') username:string) {
+    const user = this.usersService.getUserByUsername(username);
+    if(user) return new SerializedUser(user);
+    // else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+    // else throw new UserNotFound;
+    else throw new NotFoundException(); // update here
+  }
+```
+
+3. show how to handle exceptions.(this will make easy to make unit test on methods)  
+when you are not happy with response values, then you can use 'ExceptionFilter' to customize the response format.  
+
+3.1 create folder call 'filter' inside 'users' folder and create file call 'HttpException.filter.ts' file.  
+
+```ts
+import { ArgumentsHost, ExceptionFilter } from "@nestjs/common";
+import { Request, Response } from "express";
+
+export class HttpExceptionFilter implements ExceptionFilter {
+    catch(exception: any, host: ArgumentsHost) {
+        console.log(exception.getResponse());
+        console.log(exception.getStatus());
+        console.log(exception);
+ 
+        const context = host.switchToHttp();
+        const request = context.getRequest<Request>();
+        const response = context.getResponse<Response>();
+
+        response.sendStatus(exception.getStatus());
+
     }
-  }
 }
 ```
 
-6. create another middleware call 'CustomerAccountValidate'   
+3.2 to work this filter on the given route we need to add '@UseFilters(HttpExceptionFilter)' anotation with filter which we created.   
 
-6.1 create middleware file inside 'middlewares' folder call 'validate-customer-account.middleware.ts'   
-
-
-src/customers/middlewares/validate-customer-account.middleware.ts
-```ts
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { NextFunction, Request, Response } from 'express';
-
-@Injectable() 
-export class ValidateCustomerAccountMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    console.log('Hello, world. I am inside ValidateCustomerAccountMiddleware');
-    const { valid } = req.headers;
-    if(valid){
-      next();
-    }else {
-      return res.status(401).send({error: 'Customer Account Invalid!'})
-    }
+src/users/controllers/users/users.controller.ts
+```ts 
+  @UseInterceptors(ClassSerializerInterceptor)
+  @Get(':username')
+  @UseFilters(HttpExceptionFilter) // update here
+  getByUsername(@Param('username') username:string) {
+    const user = this.usersService.getUserByUsername(username);
+    if(user) return new SerializedUser(user);
+    // else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
+    // else throw new UserNotFound;
+    else throw new NotFoundException();
   }
-}
 ```
-
-6.2 show how to define second middleware in 'CustomersModule'.   
-
-```ts
-import { ValidateCustomerMiddleware } from './middlewares/validate-customer.middleware';
-import { ValidateCustomerAccountMiddleware } from './middlewares/validate-customer-account.middleware';
-
-@Module({
-  controllers: [CustomerController],
-  providers: [CustomersService]
-})
-export class CustomersModule implements NestModule{
-  configure(consumer:MiddlewareConsumer){
-    consumer.apply(
-        ValidateCustomerMiddleware,
-        ValidateCustomerAccountMiddleware // add here
-        )
-      .exclude({
-        path: 'api/customer/create',
-        method: RequestMethod.POST
-      })
-      .forRoutes(
-        CustomerController
-    )
-  }
-}
-```
-
-7. show how to add middleware as a arrow function inside CustomersModule class body.   
-
-```ts
-import { ValidateCustomerMiddleware } from './middlewares/validate-customer.middleware';
-import { ValidateCustomerAccountMiddleware } from './middlewares/validate-customer-account.middleware';
-
-@Module({
-  controllers: [CustomerController],
-  providers: [CustomersService]
-})
-export class CustomersModule implements NestModule{
-  configure(consumer:MiddlewareConsumer){
-    consumer.apply(
-        ValidateCustomerMiddleware,
-        ValidateCustomerAccountMiddleware 
-        (req:Request, res:Response, next:NextFunction) => { // start to add from here.
-        console.log('Last Middleware');
-        next();
-        }
-        )
-      .exclude({
-        path: 'api/customer/create',
-        method: RequestMethod.POST
-      })
-      .forRoutes(
-        CustomerController
-    )
-  }
-}
-```
-
-
