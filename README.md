@@ -1,133 +1,90 @@
-# Connecting to MySQL using TypeORM.
+# Saving Users to Database.
 
-here we are going to connect mysql with TypeORM.
 
-1. show command to install typeorm, type and msql driver.
+1. in 'users.controller.ts' file create post request to get data from client to save.   
 
-```bash
-$ npm i @nestjs/typeorm typeorm mysql2
-```
 
-note : make sure your mysql server up and running.   
-
-2. show how to connect mysql database.   
-
-2.1 in 'app.modules.ts' file add database datails to '@Module' imports.   
-src/app.module.ts
+1.1 first create 'CreateUserDto' class to define types and validation
 ```ts
-import { Module } from '@nestjs/common';
-import { CustomersModule } from './customers/customers.module';
-import { UsersModule } from './users/users.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { IsEmail, IsNotEmpty, MinLength } from "class-validator";
 
-@Module({
-  imports: [
-    CustomersModule,
-    UsersModule,
-    TypeOrmModule.forRoot({
-      type:'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'Samadhi@007',
-      database: 'nestjs_db',
-      entities: [], // classes that anotation with entities.
-      synchronize: true // allow auto create/update schema. false on production need migration.
-      // prod miss data if put 'synchronize: true'
-    })
-  ],
-  controllers: [],
-  providers: [],
-})
-export class AppModule {}
-```
-2.2 restart to nestjs to connect with mysql database.   
-this will show becasue of not database created that we defined in 'app.module.ts' file.  
-```bash
-$ npm run start:dev
-```
+export class CreateUserDto {
 
-2.3 login to mysql database to create above defined 'database'   
-```bash
-$ mysql -u root -p
-$ mysql > create database nestjs_db;
-```
+    @IsNotEmpty()
+    @MinLength(3)
+    username: string;
 
-2.4 restart to nestjs to connect with mysql database.   
+    @IsNotEmpty()
+    @IsEmail()
+    emailAddress: string;
 
-```bash
-$ npm run start:dev
-```
-
-3. show how to create tables with typeorms    
-
-3.1 create folder call 'typeorm' in 'src' folder and create file call 'User.ts'.    
-
-src/typeorm/User.ts
-```ts
-import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
-
-@Entity()
-export class User {
-
-    @PrimaryGeneratedColumn({
-        type:'bigint', // change default type to bigint
-        name:'user_id' // overwrite database column name to user_id
-    })
-    id: number;
-
-    @Column({
-        nullable: false,
-        default: ''
-    })
-    username:string;
-
-    @Column({
-        name:'email_address',
-        nullable: false,
-        default: ''
-    })
-    emailAddress:string;
-
-    @Column({
-        nullable:false
-    })
-    password:string;
+    @IsNotEmpty()
+    @MinLength(10)
+    password: string;
 }
 ```
 
-3.2 in the 'typeorm' folder create file call 'index.ts' file to collect the all entities to import to 'app.module.ts' file.   
+1.2 create 'create' route post method to save data.
 
-src/typeorm/index.ts
+src/users/controllers/users/users.controller.ts
 ```ts
-import { User } from './User';
-
-const entities = [User];
-
-export { User };
-export default entities;
+  @Post('create')
+  @UsePipes(ValidationPipe)
+  createUser(@Body() createUserDto: CreateUserDto){
+    this.usersService.createUser(createUserDto);
+  }
 ```
 
-3.3 all entities to import to 'app.module.ts' file
+1.3 import 'User' model to 'users.module.ts'. 
 
-src/app.module.ts
+src/users/users.module.ts
 ```ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm'; // + add 
+import { UsersController } from './controllers/users/users.controller';
+import { UsersService } from './services/users/users.service';
+import { User } from 'src/typeorm'; // + add
+
 @Module({
-  imports: [
-    CustomersModule,
-    UsersModule,
-    TypeOrmModule.forRoot({
-      type:'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'Samadhi@007',
-      database: 'nestjs_db',
-      entities: [...entities], // update here
-      synchronize: true 
-    })
-  ],
-  controllers: [],
-  providers: [],
+  imports: [TypeOrmModule.forFeature([User])], // + add
+  controllers: [UsersController],
+  // providers: [UsersService]
+  providers: [
+    {
+      provide:'USER_SERVICE',
+      useClass: UsersService
+    }
+  ]
+
 })
+export class UsersModule {}
 ```
+
+1.4 in service file inject 'userRepository' in the constructor and save the user data on the database.
+
+src/users/services/users/users.service.ts
+```ts
+import { Injectable } from '@nestjs/common';
+import { plainToClass } from 'class-transformer';
+import { InjectRepository } from '@nestjs/typeorm'; // + add
+import { Repository } from 'typeorm'; // + add
+import { User as UserEntity } from 'src/typeorm'; // + add
+import { CreateUserDto } from 'src/users/dtos/CreateUser.dto';
+import { SerializedUser, User } from 'src/users/types/User'; 
+
+@Injectable()
+export class UsersService {
+
+    constructor(@InjectRepository(UserEntity) private readonly userRespository: Repository<UserEntity>){} // + add
+    
+    /* ... */
+
+    createUser(createUserDto: CreateUserDto){
+        // return user entity and this is sycronize method
+        const newUser = this.userRespository.create(createUserDto);
+        // no async becasue ??
+        return this.userRespository.save(newUser);
+    }
+}
+```
+
