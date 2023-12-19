@@ -1,89 +1,133 @@
-# Exceptions & Handling Exceptions
+# Connecting to MySQL using TypeORM.
 
+here we are going to connect mysql with TypeORM.
 
+1. show command to install typeorm, type and msql driver.
 
-1. show how to make customer error handling.   
+```bash
+$ npm i @nestjs/typeorm typeorm mysql2
+```
 
-1.1 create folder call 'exceptions' inside 'users' folder and create 'UserNotFound.exception.ts' file in it. 
+note : make sure your mysql server up and running.   
 
-src/users/exceptions/UserNotFound.exception.ts
+2. show how to connect mysql database.   
+
+2.1 in 'app.modules.ts' file add database datails to '@Module' imports.   
+src/app.module.ts
 ```ts
-import { HttpException, HttpStatus } from "@nestjs/common";
+import { Module } from '@nestjs/common';
+import { CustomersModule } from './customers/customers.module';
+import { UsersModule } from './users/users.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
-export class UserNotFound extends HttpException {
-    constructor(msg?: string, status?:HttpStatus){
-        // here we can override message and status
-        super(msg || 'User not found', status || HttpStatus.BAD_REQUEST)
-    }
+@Module({
+  imports: [
+    CustomersModule,
+    UsersModule,
+    TypeOrmModule.forRoot({
+      type:'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      password: 'Samadhi@007',
+      database: 'nestjs_db',
+      entities: [], // classes that anotation with entities.
+      synchronize: true // allow auto create/update schema. false on production need migration.
+      // prod miss data if put 'synchronize: true'
+    })
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+2.2 restart to nestjs to connect with mysql database.   
+this will show becasue of not database created that we defined in 'app.module.ts' file.  
+```bash
+$ npm run start:dev
+```
+
+2.3 login to mysql database to create above defined 'database'   
+```bash
+$ mysql -u root -p
+$ mysql > create database nestjs_db;
+```
+
+2.4 restart to nestjs to connect with mysql database.   
+
+```bash
+$ npm run start:dev
+```
+
+3. show how to create tables with typeorms    
+
+3.1 create folder call 'typeorm' in 'src' folder and create file call 'User.ts'.    
+
+src/typeorm/User.ts
+```ts
+import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+
+@Entity()
+export class User {
+
+    @PrimaryGeneratedColumn({
+        type:'bigint', // change default type to bigint
+        name:'user_id' // overwrite database column name to user_id
+    })
+    id: number;
+
+    @Column({
+        nullable: false,
+        default: ''
+    })
+    username:string;
+
+    @Column({
+        name:'email_address',
+        nullable: false,
+        default: ''
+    })
+    emailAddress:string;
+
+    @Column({
+        nullable:false
+    })
+    password:string;
 }
 ```
 
-1.2 then go to 'users.controller.ts' file and use above custom exception to the ':username' route when user not found.  
+3.2 in the 'typeorm' folder create file call 'index.ts' file to collect the all entities to import to 'app.module.ts' file.   
 
-src/users/controllers/users/users.controller.ts
+src/typeorm/index.ts
 ```ts
-  @UseInterceptors(ClassSerializerInterceptor)
-  @Get(':username')
-  getByUsername(@Param('username') username:string) {
-    const user = this.usersService.getUserByUsername(username);
-    if(user) return new SerializedUser(user);
-    // else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
-    else throw new UserNotFound; // update here
-  }
+import { User } from './User';
+
+const entities = [User];
+
+export { User };
+export default entities;
 ```
 
-2. use nestjs buitin HTTP exception to instead of custom created 'UserNotFound' exception.  
+3.3 all entities to import to 'app.module.ts' file
 
-src/users/controllers/users/users.controller.ts
+src/app.module.ts
 ```ts
-  @UseInterceptors(ClassSerializerInterceptor)
-  @Get(':username')
-  getByUsername(@Param('username') username:string) {
-    const user = this.usersService.getUserByUsername(username);
-    if(user) return new SerializedUser(user);
-    // else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
-    // else throw new UserNotFound;
-    else throw new NotFoundException(); // update here
-  }
-```
-
-3. show how to handle exceptions.(this will make easy to make unit test on methods)  
-when you are not happy with response values, then you can use 'ExceptionFilter' to customize the response format.  
-
-3.1 create folder call 'filter' inside 'users' folder and create file call 'HttpException.filter.ts' file.  
-
-```ts
-import { ArgumentsHost, ExceptionFilter } from "@nestjs/common";
-import { Request, Response } from "express";
-
-export class HttpExceptionFilter implements ExceptionFilter {
-    catch(exception: any, host: ArgumentsHost) {
-        console.log(exception.getResponse());
-        console.log(exception.getStatus());
-        console.log(exception);
- 
-        const context = host.switchToHttp();
-        const request = context.getRequest<Request>();
-        const response = context.getResponse<Response>();
-
-        response.sendStatus(exception.getStatus());
-
-    }
-}
-```
-
-3.2 to work this filter on the given route we need to add '@UseFilters(HttpExceptionFilter)' anotation with filter which we created.   
-
-src/users/controllers/users/users.controller.ts
-```ts 
-  @UseInterceptors(ClassSerializerInterceptor)
-  @Get(':username')
-  @UseFilters(HttpExceptionFilter) // update here
-  getByUsername(@Param('username') username:string) {
-    const user = this.usersService.getUserByUsername(username);
-    if(user) return new SerializedUser(user);
-    // else throw new HttpException('User not found', HttpStatus.BAD_REQUEST);
-    // else throw new UserNotFound;
-    else throw new NotFoundException();
-  }
+@Module({
+  imports: [
+    CustomersModule,
+    UsersModule,
+    TypeOrmModule.forRoot({
+      type:'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      password: 'Samadhi@007',
+      database: 'nestjs_db',
+      entities: [...entities], // update here
+      synchronize: true 
+    })
+  ],
+  controllers: [],
+  providers: [],
+})
 ```
